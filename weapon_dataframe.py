@@ -13,8 +13,18 @@ Updates still needed
 1) make sure strength affects tohit and damage
 2) add magic weapon functionality
 3) make seperate lists for raw damage and tohit adjust damage, if there is a really skewed hit% the variance will skew in 
-an odd way
+    an odd way
 4) make the stat report function more robust, needs to run graphs in a clean way also
+5) improve comments on what everything does
+'''
+
+''' The data frame weapon_df contains 12 elements for each weapon. The first 10 are booleans indicating whether or not
+a certain characteristic is true. These characteristics can potentially alter if certain calculations are carried out. 
+This will tend to impact combat only when the game mechanic called 'feats' or 'features' are implemented. The last two 
+elements of the lists indicate first, the number of die, and second the die size for damage rolls. For example: [...,1,4]
+indicates one 4 sided die will be rolled per weapon swing, [...,2,6] indicates a two 6 sided die will be rolled per weapon 
+swing. The following ordered list corresponds with the aforementioned booleans as being true or false: 'light','finesse', 
+'thrown', 'two_handed', 'versatile', 'heavy', 'reach', 'special', 'ammunition', 'loading', 'dice_count', 'dmg'
 '''
 
 weapon_df = pd.DataFrame({'club':           [1,0,0,0,0,0,0,0,0,0,1,4],
@@ -82,8 +92,10 @@ def WeaponChoice():
         except ValueError:
             print("Please enter a valid integer between 0 and 36")
 
-'''Create a function that accepts the single fixed input bonuses for simple simulation, i.e. a
-same level analysis to get an idea of what combat looks like currently for example'''
+'''Create a function that accepts the single fixed input bonuses for simple simulation, check for certain conditions
+from the user, ask if the following mechanics should be apart of the calculation or not, specifically from the paladin
+class: Divine smite, (if so, what level divine smite), and divine fury. Later iterations of the program may do a class 
+level check to provide these as true by default if a paladin of a certain level is true else do nothing'''
 def BonusCalc():
     armor_class = int(input("Enter fixed AC: "))
     adventuring_bonus = int(input("Enter fixed Adventuring Bonus: "))
@@ -100,7 +112,13 @@ def BonusCalc():
     print('\nCalculating... ')
     return armor_class, adventuring_bonus, str_bonus, dex_bonus, attks_per_rnd, smite_chk
 
-'''Calculate whether or not a swing connects and return True or False'''
+'''Calculate whether or not a swing connects and return True or False, Mathematically the False to hit will scale the 
+damage rolled to zero but programmatically this should simply not roll to save on resources. This function takes into 
+account all the factors entered by the user and includes them in the hit chance. Hit chance is calculated by rolling a
+20 sided die and adding the characters strength or dexterity bonus, entered by the user, and the adventuring bonus,
+another value entered by the user which is related to character level. If the sum of these components is equal to or 
+greater than the armor class then there is a hit, and the calculation for damage may initiate otherwise, ToHit is false
+and damage is not rolled.'''
 def ToHit(AC=10, Adv_Bonus=0, STR=0, DEX=0):
     swing = random.randint(1, 20)
     eval = swing + Adv_Bonus + STR + DEX
@@ -121,6 +139,17 @@ def Damage(stat_clip):
         wpn_dmg1 = wpn_dmg1 + wpn_dmg2
     return wpn_dmg1
 
+
+'''
+Once the simulation is run, we will pull in the lists of data and calculate all relevant statistics in this function.
+The data should be cleanly formatted and give a comparative analysis of raw damage, that is unadjusted for hit probability,
+and simulated damage, which is round by round damage with a hit probability factored in. This provides 2 important 
+perspectives on damage calculations, knowing what a character's potential for damage is, and what the realistic outcome 
+is. This is intended to provide the user for slightly more informative analysis when speccing a character out to determine
+if a build is viable, or not, and whether the target armor class is the main contributing factor in the realistic damage 
+calculation, or not. This is intended to provide some guidance implicitly for the user to tweak their build and optimize
+damage output.
+'''
 def RunStats(dmg_sim, raw_dmg):
     raw_title = "Damage data not adjusted for hit chance"
     raw_dmg_mean = stat.mean(raw_dmg)
@@ -139,8 +168,17 @@ def RunStats(dmg_sim, raw_dmg):
     print(f'{sim_title:^20}\n\nMean: {round(dmg_sim_mean,2): <20}\nVariance: {round(dmg_sim_var,2): <20}\n'
           f'95% Confidence Interval:\n{round(dmg_sim_lowerCI,2): <15} {round(dmg_sim_mean,2): ^15}{round(dmg_sim_upperCI,2): < 20}')
 
-'''create a function that accepts all functions that contribute to combat, make it verbose enough
- to hand having fixed value inputs, range inputs and default fixed inputs'''
+'''create a master function that accepts all sub-functions which contribute to combat damage calculations, make it 
+verbose enough to handle having fixed value inputs, range inputs and default fixed inputs.
+This function should provide the following functionality to the user:
+1) Query the weapon data frame for relevant damage metrics
+2) Accept all relevant inputs for damage calculation
+3) roll to hit
+4) roll damage
+5) retain hits misses and total damage on a per round basis in a list
+6) report simulation time
+7) report simulation statistics
+'''
 def Combat():
     # FXorRNG = int(input("Would you like to do a single sim or range of sims? "))
     stat_clip = WeaponChoice()
