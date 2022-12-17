@@ -3,6 +3,7 @@ import pandas as pd
 import random
 import time
 import statistics as stat
+# import seaborn as sns
 import pdb
 '''create a dataframe that contains a boolean value for each weapon attribute
 then also include the number of die and which die the weapons do for damage
@@ -87,8 +88,6 @@ def WeaponChoice():
                 x = weapon_df.iloc[0:12, wpn-1]
                 for i in x:
                     stat_clip.append(i)
-                light, finesse, thrown, two_handed, versatile, heavy, reach, special, ammunition, loading, dice_count, dmg = stat_clip
-                # print(stat_clip)
                 return stat_clip
         except ValueError:
             print("Please enter a valid integer between 0 and 36")
@@ -114,7 +113,8 @@ def BonusCalc():
     return armor_class, adventuring_bonus, str_bonus, dex_bonus, attks_per_rnd, smite_chk
 
 '''Define a function that will calculate smite damage and or divine fury, smite_chk will be a value of 0 if false or
-greater to indicate spell level which reflects the damage calc.'''
+greater to indicate spell level which reflects the damage calc.
+'''
 def Smite(smite_chk):
     smite_dmg = []
     for k in range(smite_chk + 1):
@@ -160,26 +160,41 @@ if a build is viable, or not, and whether the target armor class is the main con
 calculation, or not. This is intended to provide some guidance implicitly for the user to tweak their build and optimize
 damage output.
 '''
-def RunStats(dmg_sim, raw_dmg):
-    raw_title = "Damage data not adjusted for hit chance"
-    raw_dmg_mean = stat.mean(raw_dmg)
-    raw_dmg_var = stat.variance(raw_dmg)
-    raw_dmg_dev = stat.stdev(raw_dmg)
-    raw_dmg_upperCI = raw_dmg_mean + 2 * raw_dmg_dev
-    raw_dmg_lowerCI = raw_dmg_mean - 2 * raw_dmg_dev
-    sim_title = "Damage data adjusted for hit chance"
-    dmg_sim_mean = stat.mean(dmg_sim)
-    dmg_sim_var = stat.variance(dmg_sim)
-    dmg_sim_dev = stat.stdev(dmg_sim)
-    dmg_sim_upperCI = dmg_sim_mean + 2 * dmg_sim_dev
-    dmg_sim_lowerCI = dmg_sim_mean - 2 * dmg_sim_dev
-    print(f'\n{raw_title:^20}\n\nMean: {round(raw_dmg_mean,2): <20}\nVariance: {round(raw_dmg_var,2) : <20}\n'
-          f'95% Confidence Interval:\n {round(raw_dmg_lowerCI,2): <15} {round(raw_dmg_mean,2): ^15}{round(raw_dmg_upperCI,2): < 20}')
-    print(f'{sim_title:^20}\n\nMean: {round(dmg_sim_mean,2): <20}\nVariance: {round(dmg_sim_var,2): <20}\n'
-          f'95% Confidence Interval:\n{round(dmg_sim_lowerCI,2): <15} {round(dmg_sim_mean,2): ^15}{round(dmg_sim_upperCI,2): < 20}')
 
 def ReportStats(raw_dmg, hit_dmg, hit_chc):
-    print(raw_dmg, hit_dmg, hit_chc)
+    # print(len(raw_dmg), len(hit_dmg), len(hit_chc))
+    raw_dmg_mean = stat.mean(raw_dmg)
+    hit_dmg_mean = stat.mean(hit_dmg)
+    hit_chc_mean = stat.mean(hit_chc)
+
+    raw_dmg_std = stat.stdev(raw_dmg)
+    hit_dmg_std = stat.stdev(hit_dmg)
+    hit_chc_std = stat.stdev(hit_chc)
+    N_root = len(raw_dmg)**.5       #Use for raw and hit, they are always the same length as each other
+    N_root_chc = len(hit_chc)
+
+    # print(raw_dmg_std, hit_dmg_std, hit_chc_std)  #troubleshooting
+    #CI calculate with square root of 10,000 as a fixed value, entered 100 to save resources
+    raw_dmg_CI_upper = raw_dmg_mean + 1.96 * (raw_dmg_std / N_root)
+    raw_dmg_CI_lower = raw_dmg_mean - 1.96 * (raw_dmg_std / N_root)
+
+    hit_dmg_CI_upper = hit_dmg_mean + 1.96 * (hit_dmg_std / N_root)
+    hit_dmg_CI_lower = hit_dmg_mean - 1.96 * (hit_dmg_std / N_root)
+
+    #Hit chance pulls from a list of varied length and must adjust accordingly, need to assign
+    #fixed values, may be worth just calculating the square root of N for code simplicity at the
+    #expense of resources, will probably be very little if we preload the calc and assign the value
+    hit_chc_CI_upper = hit_chc_mean + 1.96 * (hit_chc_std / N_root_chc)
+    hit_chc_CI_lower = hit_chc_mean - 1.96 * (hit_chc_std / N_root_chc)
+
+    return raw_dmg_mean, hit_dmg_mean, hit_chc_mean, \
+           raw_dmg_CI_lower, raw_dmg_CI_upper, \
+           hit_dmg_CI_lower,hit_dmg_CI_upper, \
+           hit_chc_CI_lower, hit_chc_CI_upper
+
+
+def ReportGraphs(x, y, z):
+    pass
 
 '''create a master function that accepts all sub-functions which contribute to combat damage calculations, make it 
 verbose enough to handle having fixed value inputs, range inputs and default fixed inputs.
@@ -193,99 +208,53 @@ This function should provide the following functionality to the user:
 7) report simulation statistics
 '''
 def Combat():
-    # FXorRNG = int(input("Would you like to do a single sim or range of sims? "))
     stat_clip = WeaponChoice()
-    # print(stat_clip)
     armor_class, adventuring_bonus, str_bonus, dex_bonus, attks_per_rnd, smite_chk = BonusCalc()  # retrieve pertinent accuracy mods for tohit calculation
-    raw_dmg = []            #accumulated, average combat round damage, regardless of weapon contact
-    hit_dmg = []            #accumulated, average combat round damage, with regard to weapon contact
+    raw_dmg = []            #accumulated, per round damage, regardless of weapon contact
+    hit_dmg = []            #accumulated, per round damage, with regard to weapon contact
     hit_chc = []            #binomial hit chance list
     start = time.time()
-    for i in range(1000):
+    for i in range(100000):
         temp_raw_dmg = []   #accumulated dmg regardless of weapon contact, round by round the list is refreshed
         temp_hit_dmg = []   #accumulated dmg with regard to weapon contact, round by round the list is refreshed
-        temp_hit_chc = []   #accumulated boolean of whether or not weapon makes contact, round by round the list is refreshed
+        #temp_hit_chc = []   #accumulated boolean of whether or not weapon makes contact, round by round the list is refreshed
         for j in range(attks_per_rnd):
-            # print(f'\nRaw attack number: {j+1}')
+            # print(f'\nRaw attack number: {j+1}')          #troubleshooting
             x = Damage(stat_clip)
             if smite_chk:
                 y = Smite(smite_chk)
                 x = x + y
             temp_raw_dmg.append(x)
-            # print(f' Temp Raw Damage: {temp_raw_dmg}')
-            # print(f' Temp Hit Damage: {temp_hit_dmg}')
+            # print(f' Temp Raw Damage: {temp_raw_dmg}')    #troubleshooting
+            # print(f' Temp Hit Damage: {temp_hit_dmg}')    #troubleshooting
         for j in range(attks_per_rnd):
-            # print(f'\nHit attack number: {j + 1}')
+            # print(f'\nHit attack number: {j + 1}')        #troubleshooting
             action = ToHit(AC=armor_class, Adv_Bonus=adventuring_bonus, STR=str_bonus, DEX=dex_bonus)  # retrieve inputs for a hit or miss -> bool
             if action:
-                temp_hit_chc.append(1)
+                hit_chc.append(1)
                 x = Damage(stat_clip)
                 if smite_chk:
                     y = Smite(smite_chk)
                     x = x + y
                 temp_hit_dmg.append(x)
             else:
-                temp_hit_chc.append(0)
-        temp_raw_dmgMean = stat.mean(temp_raw_dmg)
-        try:
-            temp_hit_dmgMean = stat.mean(temp_hit_dmg)
-        except statistics.StatisticsError:
-            temp_hit_dmgMean = 0
-        temp_hit_chcMean = stat.mean(temp_hit_chc)
+                hit_chc.append(0)
+        temp_raw_dmgMean = sum(temp_raw_dmg)
+        temp_hit_dmgMean = sum(temp_hit_dmg)
+        raw_dmg.append(temp_raw_dmgMean), hit_dmg.append(temp_hit_dmgMean)
 
-        # temp_raw_dmgMean, temp_hit_dmgMean, temp_hit_chcMean = stat.mean(temp_raw_dmg), stat.mean(temp_hit_dmg), stat.mean(temp_hit_chc)
-        # print(f' Temp Raw Damage: {temp_raw_dmg}')
-        # print(f' Temp Hit Damage: {temp_hit_dmg}')
-        raw_dmg.append(temp_raw_dmgMean), hit_dmg.append(temp_hit_dmgMean), hit_chc.append(temp_hit_chcMean)
-    print(f'\nAverage Raw Damage per Round: {stat.mean(raw_dmg)}')
-    print(f'Average Hit Adjusted Damage per Round: {stat.mean(hit_dmg)}')
-    print(f'Average Hit Chance against AC({armor_class}): {stat.mean(hit_chc)}')
+    raw_dmg_mean, hit_dmg_mean, hit_chc_mean, raw_dmg_CI_lower, raw_dmg_CI_upper, hit_dmg_CI_lower, hit_dmg_CI_upper, \
+    hit_chc_CI_lower, hit_chc_CI_upper = ReportStats(raw_dmg, hit_dmg, hit_chc)
+    # print(hit_dmg_CI_lower, hit_dmg_CI_upper)
+    print(f'Raw Mean: {round(raw_dmg_mean,2)}'
+          f'\nHit Mean: {round(hit_dmg_mean,2)}'
+          f'\nHit Probability: {round(hit_chc_mean*100,2)}%'
+          f'\nRaw CI:\n {round(raw_dmg_CI_lower,2)},{round(raw_dmg_CI_upper,2)}'
+          f'\nHit CI:\n {round(hit_dmg_CI_lower,2)},{round(hit_dmg_CI_upper,2)}'
+          f'\nHit Probability CI:\n {round(hit_chc_CI_lower*100,4)}%,{round(hit_chc_CI_upper*100,4)}%')
     finish = time.time()
+    print(f'\nRuntime:\n {round(finish - start,6)} seconds.')
     #return raw_dmg, hit_dmg, hit_prob
+
 damage_simulation = Combat()
 
-# print(damage_simulation)
-
-
-# temp_dmg_list = []      #damage bucket to be appended to dmg_sim list, this is a place holder for each iteration, refreshes each time
-# temp_raw_list = []
-# for j in range(attks_per_rnd):
-#     action = ToHit(AC=armor_class, Adv_Bonus=adventuring_bonus, STR=str_bonus, DEX=dex_bonus)  # retrieve inputs for a hit or miss -> bool
-#     temp_raw_list.append(Damage(stat_clip))
-#     if smite_chk:
-#         smite_dmg = []
-#         for k in range(smite_chk + 1):
-#             smite = random.randint(1, 8)
-#             smite_dmg.append(smite)
-#         temp_raw_list.append(sum(smite_dmg))
-#     elif action:
-#         hit_sim.append(1)
-#         temp_dmg_list.append(Damage(stat_clip))
-#         if smite_chk:
-#             smite_dmg = []
-#             for k in range(smite_chk + 1):
-#                 smite = random.randint(1, 8)
-#                 smite_dmg.append(smite)
-#             temp_dmg_list.append(sum(smite_dmg))
-#     else:
-#         temp_dmg_list.append(0)
-#         hit_sim.append(0)
-
-# long_run_average = stat.mean(dmg_sim)
-# raw_dmg = []              #need to make this its own loop, not a subset of adjusted damage sim
-# for l in dmg_sim:
-#     if l != 0:
-#         raw_dmg.append(l)
-# print("dmg sim")
-# print(dmg_sim)
-# print("hit sim")
-# print(hit_sim)
-# print("raw dmg")
-# print(raw_dmg)
-# RunStats(dmg_sim, raw_dmg)
-# print(f'Average hit chance: {sum(hit_sim) / len(hit_sim)}')
-# print(f'\n{round(finish - start, 2)} seconds to compute.')
-# return stat.mean(dmg_sim)
-
-# elif we want a range with specific allocations at each step
-# else we want a range with linear range specifications
